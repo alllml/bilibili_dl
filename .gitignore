@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environment
+venv/
+
+# Build output
+build/
+dist/
+*.spec
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Temporary / cache files
+debug_render_data.txt
+*.db
+*.backup
+
+# Local config (contains sensitive cookies)
+config.ini
+
+# Claude local config
+.claude/
+
+# Version info (build artifact)
+version_info.txt

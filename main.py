@@ -1287,5 +1287,52 @@ def main():
     sys.exit(app.exec())
 
 
+def _log_startup_error(exc: BaseException) -> None:
+    """未捕获异常兜底：打包后无控制台，异常会"静默闪退"。
+
+    这里把 traceback 落盘到日志目录（找不到就放到 exe 旁边），
+    并尽量弹一个消息框告诉用户日志位置，避免"点了没反应、无从查起"。
+    """
+    import traceback
+
+    detail = traceback.format_exc()
+    candidates = []
+    try:
+        candidates.append(os.path.join(get_log_dir(), "startup_error.log"))
+    except Exception:
+        pass
+    try:
+        candidates.append(os.path.join(
+            os.path.dirname(os.path.abspath(sys.argv[0])), "startup_error.log"))
+    except Exception:
+        pass
+
+    saved = ""
+    for path in candidates:
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(detail)
+            saved = path
+            break
+        except Exception:
+            continue
+
+    try:
+        from PySide6.QtWidgets import QApplication, QMessageBox
+        app = QApplication.instance() or QApplication(sys.argv)
+        QMessageBox.critical(
+            None, "程序发生错误",
+            f"程序遇到未处理的错误（{type(exc).__name__}: {exc}）。\n\n"
+            + (f"错误日志已保存到：\n{saved}" if saved else "未能写出错误日志。"))
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except BaseException as e:  # noqa: BLE001 —— 打包版需要兜底，避免静默闪退
+        _log_startup_error(e)
+        sys.exit(1)

@@ -129,6 +129,32 @@ coll = COLLECT(
     print(f"[OK] 生成 spec 文件: {spec_path}")
     return spec_path
 
+def verify_bundle() -> bool:
+    """打包产物自检：关键文件必须都在，否则说明 PyInstaller 收集不完整。
+
+    背景：PyInstaller 收集 Qt 插件信息时依赖一个隔离的子进程，
+    在个别环境下该子进程会偶发崩溃（PyInstaller 只打 WARNING 然后跳过），
+    导致产物缺少 qwindows.dll 等关键文件 —— 这样的 exe 双击后静默闪退。
+    所以这里做一次强校验，缺了就报失败，让调用方重试。
+    """
+    dist = DIST_DIR / "VideoDownloader"
+    required = [
+        dist / "VideoDownloader.exe",
+        dist / "_internal" / "PySide6" / "plugins" / "platforms" / "qwindows.dll",
+        dist / "_internal" / "plugins" / "bilibili_plugin.py",
+        dist / "_internal" / "plugins" / "douyin_plugin.py",
+        dist / "_internal" / "plugins" / "twitter_plugin.py",
+    ]
+    missing = [str(p.relative_to(ROOT_DIR)) for p in required if not p.exists()]
+    if missing:
+        print("\n[--] 产物自检未通过，缺少关键文件（PySide6 收集不完整，请重试）：")
+        for m in missing:
+            print(f"     缺失: {m}")
+        return False
+    print("[OK] 产物自检通过（Qt 平台插件、三个平台插件均在）")
+    return True
+
+
 def build():
     """执行打包"""
     print("=" * 60)
@@ -159,19 +185,22 @@ def build():
     cmd = [sys.executable, "-m", "PyInstaller", "--clean", "-y", str(spec_path)]
     result = subprocess.run(cmd, cwd=ROOT_DIR)
 
-    if result.returncode == 0:
-        print("\n" + "=" * 60)
-        print("[OK] 打包成功！")
-        print(f"输出目录: {DIST_DIR / 'VideoDownloader'}")
-        print(f"可执行文件: {DIST_DIR / 'VideoDownloader' / 'VideoDownloader.exe'}")
-        print("=" * 60)
-        print("\n注意事项:")
-        print("  1. 需要安装 FFmpeg 到系统 PATH（用于 B站视频合并）")
-        print("  2. 需要安装 Edge 或 Chrome 浏览器（用于抖音扫码登录）")
-        return 0
-    else:
+    if result.returncode != 0:
         print("\n[--] 打包失败")
         return 1
+
+    if not verify_bundle():
+        return 1
+
+    print("\n" + "=" * 60)
+    print("[OK] 打包成功！")
+    print(f"输出目录: {DIST_DIR / 'VideoDownloader'}")
+    print(f"可执行文件: {DIST_DIR / 'VideoDownloader' / 'VideoDownloader.exe'}")
+    print("=" * 60)
+    print("\n注意事项:")
+    print("  1. 需要安装 FFmpeg 到系统 PATH（用于 B站视频合并）")
+    print("  2. 需要安装 Edge 或 Chrome 浏览器（用于抖音扫码登录）")
+    return 0
 
 if __name__ == "__main__":
     sys.exit(build())

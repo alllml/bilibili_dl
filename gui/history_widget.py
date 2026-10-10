@@ -66,22 +66,17 @@ class HistoryWidget(QWidget):
 
         self._search_input = QLineEdit()
         self._search_input.setPlaceholderText("搜索标题 / UP主...")
-        self._search_input.setStyleSheet(
-            "border: 1px solid #ddd; border-radius: 6px; padding: 6px 12px; "
-            "font-size: 13px; background-color: #fff;")
         self._search_input.returnPressed.connect(self._on_search)
         filter_row.addWidget(self._search_input, 1)
 
         search_btn = QPushButton("搜索")
-        search_btn.setFixedWidth(60)
-        search_btn.setStyleSheet(
-            "QPushButton { background-color: #fb7299; color: white; border: none; "
-            "border-radius: 6px; padding: 6px 12px; font-size: 13px; }")
+        search_btn.setFixedWidth(64)
+        search_btn.setStyleSheet("QPushButton { padding: 8px 12px; }")
         search_btn.clicked.connect(self._on_search)
         filter_row.addWidget(search_btn)
 
         platform_label = QLabel("平台：")
-        platform_label.setStyleSheet("font-size: 13px; color: #666;")
+        platform_label.setStyleSheet("font-size: 13px; color: #646A73; background: transparent;")
         filter_row.addWidget(platform_label)
 
         self._platform_combo = QComboBox()
@@ -101,55 +96,69 @@ class HistoryWidget(QWidget):
         layout.addLayout(filter_row)
 
         # 记录表格
+        # 列宽策略与「下载队列」保持一致：
+        #   标题 —— 拉伸；其余文字列 —— 按内容自适应（避免文字被截）；
+        #   操作 —— 给足宽度的可拖拽列。
         self._table = QTableWidget()
         self._table.setColumnCount(7)
         self._table.setHorizontalHeaderLabels(
             ["标题", "平台", "清晰度", "大小", "日期", "状态", "操作"])
-        self._table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch)
-        for col, width in [(1, 50), (2, 70), (3, 70), (4, 130), (5, 70), (6, 140)]:
-            self._table.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.Fixed)
-            self._table.setColumnWidth(col, width)
-        self._table.verticalHeader().setVisible(False)
+        header_view = self._table.horizontalHeader()
+        header_view.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for col in (1, 2, 3, 4, 5):
+            header_view.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+        header_view.setSectionResizeMode(6, QHeaderView.ResizeMode.Interactive)
+        self._table.setColumnWidth(6, 150)
+        header_view.setMinimumSectionSize(56)
+
+        # 行高给够：操作按钮本身 26px + 上下边距，默认行高（约 30px）会把按钮压扁
+        vertical_header = self._table.verticalHeader()
+        vertical_header.setVisible(False)
+        vertical_header.setDefaultSectionSize(48)
+        vertical_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+
+        self._table.setMinimumHeight(220)
+        self._table.setMinimumWidth(560)
         self._table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.setAlternatingRowColors(True)
-        self._table.setStyleSheet("""
-            QTableWidget { border: 1px solid #e8e8e8; border-radius: 6px;
-                           background-color: #fff; gridline-color: #f0f0f0;
-                           font-size: 13px; }
-            QTableWidget::item { padding: 6px 8px; }
-            QTableWidget::item:selected { background-color: #fde8ef; color: #333; }
-        """)
+        self._table.setShowGrid(False)
+        self._table.setHorizontalScrollMode(
+            QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self._table.setVerticalScrollMode(
+            QAbstractItemView.ScrollMode.ScrollPerPixel)
         layout.addWidget(self._table, 1)
 
         # 底部分页栏
         page_row = QHBoxLayout()
         self._total_label = QLabel("共 0 条记录")
-        self._total_label.setStyleSheet("font-size: 12px; color: #999;")
+        self._total_label.setStyleSheet("font-size: 12px; color: #8A9099; background: transparent;")
         page_row.addWidget(self._total_label)
         page_row.addStretch()
 
         self._prev_btn = QPushButton("上一页")
         self._prev_btn.setFixedWidth(70)
         self._prev_btn.setStyleSheet(
-            "QPushButton { background-color: #f5f5f5; color: #666; border: 1px solid #ddd; "
-            "border-radius: 4px; font-size: 12px; padding: 4px; }")
+            "QPushButton { background-color: #FFFFFF; color: #646A73; border: 1px solid #E1E4EA; "
+            "border-radius: 6px; font-size: 12px; font-weight: 500; padding: 4px; }"
+            "QPushButton:hover { background-color: #F5F6F8; }"
+            "QPushButton:disabled { color: #C2C7CE; background-color: #F7F8FA; }")
         self._prev_btn.clicked.connect(self._on_prev_page)
         page_row.addWidget(self._prev_btn)
 
         self._page_label = QLabel("1 / 1")
-        self._page_label.setStyleSheet("font-size: 12px; color: #666;")
+        self._page_label.setStyleSheet("font-size: 12px; color: #646A73; background: transparent;")
         page_row.addWidget(self._page_label)
 
         self._next_btn = QPushButton("下一页")
         self._next_btn.setFixedWidth(70)
         self._next_btn.setStyleSheet(
-            "QPushButton { background-color: #f5f5f5; color: #666; border: 1px solid #ddd; "
-            "border-radius: 4px; font-size: 12px; padding: 4px; }")
+            "QPushButton { background-color: #FFFFFF; color: #646A73; border: 1px solid #E1E4EA; "
+            "border-radius: 6px; font-size: 12px; font-weight: 500; padding: 4px; }"
+            "QPushButton:hover { background-color: #F5F6F8; }"
+            "QPushButton:disabled { color: #C2C7CE; background-color: #F7F8FA; }")
         self._next_btn.clicked.connect(self._on_next_page)
         page_row.addWidget(self._next_btn)
 
@@ -237,15 +246,15 @@ class HistoryWidget(QWidget):
         record_id = rec.get("id")
 
         btn_style_green = (
-            "QPushButton { background-color: #f6ffed; color: #389e0d; "
-            "border: 1px solid #b7eb8f; border-radius: 4px; font-size: 12px; "
-            "font-weight: bold; padding: 2px 8px; }"
-            "QPushButton:hover { background-color: #d9f7be; }")
+            "QPushButton { background-color: #EAF7F0; color: #1F9254; "
+            "border: 1px solid #BFE6D2; border-radius: 6px; font-size: 12px; "
+            "font-weight: 500; padding: 2px 10px; }"
+            "QPushButton:hover { background-color: #D8F0E4; }")
         btn_style_red = (
-            "QPushButton { background-color: #fff1f0; color: #cf1322; "
-            "border: 1px solid #ffa39e; border-radius: 4px; font-size: 12px; "
-            "font-weight: bold; padding: 2px 8px; }"
-            "QPushButton:hover { background-color: #ffccc7; }")
+            "QPushButton { background-color: #FDECEC; color: #D9363E; "
+            "border: 1px solid #F7C6C7; border-radius: 6px; font-size: 12px; "
+            "font-weight: 500; padding: 2px 10px; }"
+            "QPushButton:hover { background-color: #FBD9D9; }")
 
         # 打开目录按钮（仅文件存在时可用）
         if file_path and os.path.exists(file_path):

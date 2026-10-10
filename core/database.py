@@ -113,6 +113,30 @@ class DownloadHistoryDB:
                     "SELECT COUNT(*) FROM download_history")
             return cursor.fetchone()[0]
 
+    def find_completed(self, url: str = "", title: str = "") -> Optional[dict]:
+        """
+        查找已成功下载过的记录（先按 URL 精确匹配，再按标题匹配）。
+        用于「该视频似乎已下载过」的重复下载提示。找不到返回 None。
+        """
+        with self._lock:
+            if url:
+                cursor = self._conn.execute(
+                    "SELECT * FROM download_history "
+                    "WHERE url = ? AND status = 'completed' "
+                    "ORDER BY created_at DESC LIMIT 1", (url,))
+                row = cursor.fetchone()
+                if row:
+                    return dict(row)
+            if title:
+                cursor = self._conn.execute(
+                    "SELECT * FROM download_history "
+                    "WHERE title = ? AND status = 'completed' "
+                    "ORDER BY created_at DESC LIMIT 1", (title,))
+                row = cursor.fetchone()
+                if row:
+                    return dict(row)
+        return None
+
     def delete_record(self, record_id: int) -> None:
         """删除单条记录"""
         with self._lock:

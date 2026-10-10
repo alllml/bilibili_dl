@@ -1,0 +1,12 @@
+# 默认按文本处理，仓库内统一 LF
+* text=auto eol=lf
+
+# Windows 批处理必须是 CRLF，否则可能无法执行
+*.bat text eol=crlf
+
+# 二进制资源
+*.ico binary
+*.png binary
+*.jpg binary
+*.db  binary
+*.exe binary

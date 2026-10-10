@@ -5,11 +5,16 @@ Twitter/X 视频解析插件
 继承 BaseExtractor，实现 Twitter/X 平台的视频解析逻辑。
 使用 Guest Token + GraphQL API 获取推文视频信息。
 """
+import os
 import re
+import shutil
+import tempfile
+
 import requests
 
 from core.base_extractor import BaseExtractor, VideoInfo
-from core.downloader import download_file
+from core.downloader import download_file, DownloadCancelled
+from core.media import ffmpeg_extract_audio
 
 
 # Twitter API 地址
@@ -40,7 +45,7 @@ class TwitterExtractor(BaseExtractor):
     使用 Guest Token 访问公开推文，无需登录。
     """
 
-    SUPPORTED_DOMAINS = ["twitter.com", "x.com", "mobile.twitter.com"]
+    SUPPORTED_DOMAINS = ["twitter.com", "x.com"]
     PLATFORM_ID = "twitter"
     PLATFORM_NAME = "Twitter"
     REQUIRES_COOKIE = True
@@ -329,22 +334,59 @@ class TwitterExtractor(BaseExtractor):
             "User-Agent": _DEFAULT_HEADERS["User-Agent"],
         }
 
-        print("  正在下载 Twitter 视频...")
+        capabilities = capabilities or {}
+        cancel_event = capabilities.get("cancel_event")
 
+        # ---- 仅下载音频（MP3）：先下完整视频，再抽取音轨 ----
+        if capabilities.get("audio_only"):
+            ffmpeg_path = capabilities.get("ffmpeg_path", "")
+            if not ffmpeg_path:
+                raise RuntimeError("「仅下载音频」需要 FFmpeg，请先在 设置 中指定 FFmpeg 路径")
+
+            tmp_dir = tempfile.mkdtemp(prefix="twitter_audio_")
+            tmp_video = os.path.join(tmp_dir, "video.mp4")
+            try:
+                print("  正在下载 Twitter 视频...")
+                self._download_with_retry(video_url, download_headers, tmp_video,
+                                          progress_callback, cancel_event)
+                if cancel_event is not None and cancel_event.is_set():
+                    raise DownloadCancelled("用户已取消下载")
+                print("  正在提取音频并转换为 MP3...")
+                ffmpeg_extract_audio(ffmpeg_path, tmp_video, save_path)
+                if progress_callback:
+                    progress_callback(100, 100)
+                print(f"  音频已保存: {save_path}")
+            finally:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            return
+
+        print("  正在下载 Twitter 视频...")
+        self._download_with_retry(video_url, download_headers, save_path,
+                                  progress_callback, cancel_event)
+        print(f"  下载完成: {save_path}")
+
+    @staticmethod
+    def _download_with_retry(url: str, headers: dict, dest_path: str,
+                             progress_callback, cancel_event, max_attempts: int = 3) -> None:
+        """带重试的下载（Twitter CDN 偶尔抖动）"""
         import time
 
         last_error = None
-        for attempt in range(1, 4):
+        for attempt in range(1, max_attempts + 1):
             try:
-                download_file(video_url, download_headers, save_path,
-                              progress_callback=progress_callback)
-                print(f"  下载完成: {save_path}")
+                download_file(url, headers, dest_path,
+                              progress_callback=progress_callback,
+                              cancel_event=cancel_event)
                 return
+            except DownloadCancelled:
+                raise
             except Exception as e:
                 last_error = e
                 print(f"  下载失败（第 {attempt} 次），错误: {type(e).__name__}: {e}")
-                if attempt < 3:
+                if attempt < max_attempts:
                     time.sleep(2)
-                    print(f"  正在重试...")
+                    print("  正在重试...")
 
-        raise RuntimeError(f"Twitter 视频下载失败（已重试 3 次）: {type(last_error).__name__}: {last_error}")
+        raise RuntimeError(
+            f"Twitter 视频下载失败（已重试 {max_attempts} 次）: "
+            f"{type(last_error).__name__}: {last_error}")

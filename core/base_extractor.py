@@ -17,7 +17,11 @@ class VideoInfo(TypedDict, total=False):
     title: str              # 视频标题
     cover_url: str          # 封面图 URL
     video_url: str          # 视频流 URL（降级模式下的单一流）
+    primary_url: str        # 被清晰度选择覆盖前的原始地址（兜底候选）
     audio_url: str          # 音频流 URL（Dash 模式）
+    video_urls: list        # 视频流的全部 CDN 候选地址（失败时依次尝试）
+    audio_urls: list        # 音频流的全部 CDN 候选地址
+    connections: int        # 下载分片线程数（1 表示单线程）
     streams: list           # 可用的清晰度列表
     headers: dict           # 下载时需要携带的请求头（Referer、Cookie 等）
     platform: str           # 来源平台标识（如 "bilibili"、"douyin"）
@@ -25,6 +29,9 @@ class VideoInfo(TypedDict, total=False):
     owner: str              # UP 主名称
     view_count: int         # 播放量
     danmaku_count: int      # 弹幕数
+    pages: list             # B站多P列表：[{index, title, cid, duration}]
+    bvid: str               # B站 BV 号（弹幕/字幕接口需要）
+    cid: int                # B站 cid（弹幕/字幕接口需要）
 
 
 class BaseExtractor(ABC):
@@ -67,3 +74,13 @@ class BaseExtractor(ABC):
         实际的 HTTP 分块下载委托给公共工具函数 download_file。
         """
         ...
+
+    def download_extras(self, video_info: VideoInfo, save_path: str,
+                        capabilities: dict, want_danmaku: bool = False,
+                        want_subtitle: bool = False) -> list:
+        """
+        【可选钩子】下载主视频之外的附加资源（弹幕、字幕等）。
+        默认什么也不做；需要的平台（如 B站）覆写此方法即可。
+        返回生成的文件路径列表，便于上层统计与提示。
+        """
+        return []

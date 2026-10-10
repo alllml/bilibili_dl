@@ -26,5 +26,8 @@ config.ini
 # Claude local config
 .claude/
 
+# 工作区内部笔记 / 记忆（不入库）
+.workbuddy/
+
 # Version info (build artifact)
 version_info.txt

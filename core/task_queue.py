@@ -14,13 +14,18 @@ class DownloadTask:
     """单个下载任务的数据模型"""
 
     def __init__(self, url: str, video_info: dict, quality_id: int = None,
-                 save_dir: str = ""):
+                 save_dir: str = "", audio_only: bool = False,
+                 want_danmaku: bool = False, want_subtitle: bool = False):
         self.task_id: str = str(uuid.uuid4())[:8]
         self.url: str = url
         self.video_info: dict = video_info
         self.quality_id: int | None = quality_id
-        self.quality_name: str = self._resolve_quality_name()
+        self.quality_name: str = "仅音频" if audio_only else self._resolve_quality_name()
         self.save_dir: str = save_dir
+        # 输出选项
+        self.audio_only: bool = audio_only
+        self.want_danmaku: bool = want_danmaku
+        self.want_subtitle: bool = want_subtitle
         self.status: str = "pending"  # pending / downloading / completed / failed
         self.progress: float = 0.0
         self.downloaded: int = 0
@@ -28,6 +33,15 @@ class DownloadTask:
         self.file_path: str = ""
         self.error_msg: str = ""
         self.created_at: float = time.time()
+        # 取消标记：置位后正在进行的下载会尽快中断
+        self.cancel_event = threading.Event()
+        # 进度显示用：下载速度（字节/秒）与预计剩余秒数
+        self.speed: float = 0.0
+        self.eta: int = -1
+
+    def cancel(self) -> None:
+        """请求取消该任务（线程安全，只置位标记）"""
+        self.cancel_event.set()
 
     @property
     def title(self) -> str:
@@ -85,6 +99,31 @@ class TaskQueue:
             for i, task in enumerate(self._tasks):
                 if task.task_id == task_id and task.status == "pending":
                     self._tasks.pop(i)
+                    return True
+        return False
+
+    def promote(self, task_id: str) -> bool:
+        """把指定待下载任务移到队首（置顶，优先下载）"""
+        with self._lock:
+            for i, task in enumerate(self._tasks):
+                if task.task_id == task_id and task.status == "pending":
+                    self._tasks.insert(0, self._tasks.pop(i))
+                    return True
+        return False
+
+    def reset_for_retry(self, task_id: str) -> bool:
+        """把失败/已取消的任务重置为待下载，供「重试」使用"""
+        with self._lock:
+            for task in self._tasks:
+                if task.task_id == task_id and task.status in ("failed", "cancelled"):
+                    task.status = "pending"
+                    task.progress = 0.0
+                    task.downloaded = 0
+                    task.total = 0
+                    task.speed = 0.0
+                    task.eta = -1
+                    task.error_msg = ""
+                    task.cancel_event = threading.Event()
                     return True
         return False
 

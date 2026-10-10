@@ -11,6 +11,8 @@ import os
 import subprocess
 import sys
 
+from core.cookie_utils import build_cookie_str
+
 
 class EnvironmentChecker:
     """
@@ -118,30 +120,16 @@ class EnvironmentChecker:
     def set_cookie_for_platform(self, platform_id: str, cookie: str) -> None:
         """
         统一接口：保存平台 Cookie。
-        抖音 Cookie 会自动精简，只保留关键字段。
+        自动从用户粘贴的内容中挑出该平台的关键字段并规整格式
+        （抖音 Cookie 分段很多，用户整段粘贴即可，无需手动拆）。
         """
-        cookie = cookie.strip()
-        key = f"{platform_id}_cookie"
+        cookie = (cookie or "").strip()
+        if cookie:
+            cookie, present, missing = build_cookie_str(cookie, platform_id)
+            print(f"[环境检测] {platform_id} Cookie 已规整："
+                  f"识别 {present or '无'}；缺失 {missing or '无'}")
 
-        # 抖音 Cookie 特殊处理：只保留关键字段
-        if platform_id == "douyin" and cookie:
-            key_fields = ["sessionid", "ttwid", "sid_guard", "odin_tt"]
-            cookie_dict = {}
-            for item in cookie.split(";"):
-                item = item.strip()
-                if "=" in item:
-                    name, value = item.split("=", 1)
-                    name = name.strip()
-                    if name in key_fields:
-                        cookie_dict[name] = value.strip()
-
-            if cookie_dict:
-                cookie = "; ".join([f"{k}={v}" for k, v in cookie_dict.items()])
-                print(f"[环境检测] 抖音 Cookie 已精简，保留 {len(cookie_dict)} 个关键字段")
-            else:
-                print(f"[环境检测] 未检测到标准关键字段，保存原始 Cookie")
-
-        self._config.set("settings", key, cookie)
+        self._config.set("settings", f"{platform_id}_cookie", cookie)
         self._save_config()
 
     # ---- 兼容旧代码的别名方法（逐步废弃）----
@@ -188,7 +176,81 @@ class EnvironmentChecker:
         return {
             "ffmpeg_available": self._ffmpeg_path is not None,
             "ffmpeg_path": self._ffmpeg_path or "",
+            "connections": self.get_download_connections(),
+            "adaptive_connections": self.is_connections_auto(),
         }
+
+    # ---- 下载分片线程数 ----
+
+    # 「自动」模式下并发的上限（实际并发由下载器按实时吞吐自适应，
+    # 从 2 起步，只有确实能提速才会往上加，所以这里给一个宽松的上限）
+    AUTO_CONNECTION_CAP = 16
+
+    def _raw_connection_setting(self) -> str:
+        return str(self._config.get("settings", "download_connections",
+                                    fallback="auto") or "auto").strip().lower()
+
+    def is_connections_auto(self) -> bool:
+        """分片并发是否交给下载器自适应（默认自动）"""
+        return self._raw_connection_setting() in ("auto", "", "0", "-1")
+
+    def get_download_connections(self) -> int:
+        """
+        单文件下载的**并发上限**（1 表示单线程）。
+        - 设置为 auto（默认）：返回 AUTO_CONNECTION_CAP，实际并发自适应；
+        - 设置为数字：固定以该数字为并发上限。
+        B站等 CDN 对单连接有限速，多分片能明显提速。
+        """
+        raw = self._raw_connection_setting()
+        if raw in ("auto", "", "0", "-1"):
+            return self.AUTO_CONNECTION_CAP
+        try:
+            value = int(raw)
+        except (ValueError, TypeError):
+            return self.AUTO_CONNECTION_CAP
+        return max(1, min(value, 16))
+
+    def set_download_connections(self, count) -> None:
+        """count 可为 'auto'（自动）或 1-16 的整数；0 / 负数 / 非法值一律按「自动」处理"""
+        raw = count.strip().lower() if isinstance(count, str) else count
+        if raw in ("auto", "", "0", "-1") or (isinstance(raw, (int, float)) and raw <= 0):
+            self._config.set("settings", "download_connections", "auto")
+        else:
+            try:
+                text = str(max(1, min(int(raw), 16)))
+            except (ValueError, TypeError):
+                text = "auto"
+            self._config.set("settings", "download_connections", text)
+        self._save_config()
+
+    # ---- 文件名模板 ----
+
+    DEFAULT_FILENAME_TEMPLATE = "{title}"
+
+    def get_filename_template(self) -> str:
+        """
+        读取文件名模板，可用占位符：
+        {title} 标题、{owner} UP主/作者、{platform} 平台、{quality} 清晰度、{date} 日期
+        """
+        tpl = self._config.get(
+            "settings", "filename_template", fallback="").strip()
+        return tpl or self.DEFAULT_FILENAME_TEMPLATE
+
+    def set_filename_template(self, tpl: str) -> None:
+        self._config.set("settings", "filename_template",
+                         (tpl or "").strip() or self.DEFAULT_FILENAME_TEMPLATE)
+        self._save_config()
+
+    # ---- 剪贴板自动填入 ----
+
+    def get_auto_paste(self) -> bool:
+        """是否允许「复制链接后自动填入输入框」，默认开启"""
+        val = self._config.get("settings", "auto_paste_clipboard", fallback="1").strip()
+        return val not in ("0", "false", "False")
+
+    def set_auto_paste(self, enabled: bool) -> None:
+        self._config.set("settings", "auto_paste_clipboard", "1" if enabled else "0")
+        self._save_config()
 
     # ---- 并发下载数 ----
 

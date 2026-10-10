@@ -152,9 +152,11 @@ def build():
         shutil.rmtree(BUILD_DIR)
 
     # 执行 PyInstaller
+    # 用 sys.executable -m PyInstaller 而不是裸命令 pyinstaller：
+    # 这样无论 venv\Scripts 是否在 PATH 里都能跑（直接双击/用别的 shell 也不会找不到）
     print("\n开始打包...")
     print("-" * 60)
-    cmd = ["pyinstaller", "--clean", "-y", str(spec_path)]
+    cmd = [sys.executable, "-m", "PyInstaller", "--clean", "-y", str(spec_path)]
     result = subprocess.run(cmd, cwd=ROOT_DIR)
 
     if result.returncode == 0:

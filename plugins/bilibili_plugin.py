@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from urllib.parse import urlparse, parse_qs
 
 import requests
@@ -16,6 +17,28 @@ import requests
 from core.base_extractor import BaseExtractor, VideoInfo
 from core.downloader import download_file, DownloadCancelled, probe_fastest_url
 from core.media import ffmpeg_extract_audio
+
+
+def _http_get(url, params=None, headers=None, timeout=15, attempts=3):
+    """
+    带重试的 GET（用于解析阶段的 API 请求）。
+
+    走 VPN / 代理时，到 api.bilibili.com 的连接经常被中途重置
+    （SSLEOFError / ConnectionError / 超时），一次失败就放弃会导致"解析失败"。
+    这里对**网络类错误**自动重试；HTTP 4xx/5xx（如风控 412）不重试、直接抛。
+    """
+    last_exc = None
+    for i in range(1, attempts + 1):
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=timeout)
+            resp.raise_for_status()
+            return resp
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            last_exc = e
+            if i < attempts:
+                time.sleep(0.8 * i)
+                print(f"  请求失败（{type(e).__name__}），第 {i + 1} 次重试...")
+    raise last_exc
 
 
 # B 站 API 地址
@@ -139,8 +162,7 @@ class BilibiliExtractor(BaseExtractor):
             print(f"  AV号: av{avid}")
 
         # ---- 第一步：获取视频基本信息 ----
-        resp = requests.get(_VIEW_API, params=params, headers=headers, timeout=10)
-        resp.raise_for_status()
+        resp = _http_get(_VIEW_API, params=params, headers=headers)
         view_data = resp.json()
 
         if view_data.get("code") != 0:
@@ -207,8 +229,7 @@ class BilibiliExtractor(BaseExtractor):
             "fnval": 16,
             "fourk": 1,
         }
-        resp = requests.get(_PLAYURL_API, params=playurl_params, headers=headers, timeout=10)
-        resp.raise_for_status()
+        resp = _http_get(_PLAYURL_API, params=playurl_params, headers=headers)
         playurl_data = resp.json()
 
         if playurl_data.get("code") != 0:

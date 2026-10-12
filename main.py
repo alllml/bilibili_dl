@@ -704,6 +704,8 @@ class MainWindow(QMainWindow):
 
         def on_parse_error(msg):
             self._parse_btn.setEnabled(True)
+            # 落盘日志：之前解析错误只显示在状态栏，日志里查不到，排查困难
+            print(f"  解析出错: {msg}")
             self._status_label.setText(f"解析失败: {msg}")
 
         def on_not_implemented():

@@ -26,7 +26,7 @@ import requests
 PLATFORM_COOKIE_RULES: dict[str, dict[str, list[str]]] = {
     "bilibili": {
         "required": ["SESSDATA"],
-        "optional": ["bili_jct", "DedeUserID", "buvid3"],
+        "optional": ["bili_jct", "DedeUserID", "buvid3", "buvid4", "b_nut"],
     },
     "douyin": {
         "required": ["sessionid"],

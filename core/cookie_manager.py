@@ -230,12 +230,35 @@ class BilibiliCookieManager(_SeleniumLoginBase):
     PLATFORM_ID = "bilibili"
     PLATFORM_NAME = "B站"
 
+    # 需要保留的关键字段。
+    # 注意：buvid3 是设备指纹，B站风控缺它会直接 412（Precondition Failed），
+    # 所以绝不能只留 SESSDATA。
+    KEY_FIELDS = ["SESSDATA", "bili_jct", "DedeUserID", "buvid3", "buvid4", "b_nut"]
+
     def _is_logged_in(self) -> bool:
         return bool(self._get_cookie_value("SESSDATA"))
 
     def _build_cookie(self) -> str:
-        sessdata = self._get_cookie_value("SESSDATA")
-        return f"SESSDATA={sessdata}" if sessdata else ""
+        # 登录页在 passport.bilibili.com，直接 get_cookies() 只能拿到该域名下
+        # 的 Cookie，会漏掉 .bilibili.com 域下的 buvid3 等设备指纹
+        # （缺了 buvid3 → B站返回 412）。先跳到主站再读，确保拿到全量。
+        try:
+            self._driver.get("https://www.bilibili.com/")
+            time.sleep(1.0)
+        except Exception:
+            pass
+
+        try:
+            cookie_dict = {
+                c["name"]: c["value"]
+                for c in self._driver.get_cookies()
+                if c.get("name")
+            }
+        except Exception:
+            return ""
+
+        parts = [f"{k}={cookie_dict[k]}" for k in self.KEY_FIELDS if k in cookie_dict]
+        return "; ".join(parts)
 
 
 class DouyinCookieManager(_SeleniumLoginBase):

@@ -1,11 +1,40 @@
-# Video Downloader
+# 视频下载工具 (VideoDownloader)
 
-一个面向国内平台的桌面视频下载工具（PySide6 GUI），支持 **B站 / 抖音 / Twitter(X)**，
-采用**插件化架构**（工厂模式 + 策略模式），解析与下载逻辑按平台隔离，新增平台只需加一个插件文件。
+[![Release](https://img.shields.io/badge/下载-v1.0.0-FB7299?logo=github)](https://github.com/alllml/bilibili_dl/releases)
+[![Platform](https://img.shields.io/badge/平台-Windows%20x64-blue)](https://github.com/alllml/bilibili_dl/releases)
+[![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-```
-粘贴链接 → 解析 → 选清晰度 → 加入队列 → 多线程分片下载 → 自动合并/转码
-```
+**粘贴链接，下载视频。** 一个 Windows 免安装的桌面视频下载器，支持 **B站 / 抖音 / Twitter(X)**，
+不用装任何依赖——解压、双击、用。
+
+> 🖼️ *（此处放一张主界面截图，效果翻倍——见下方"待办"）*
+
+## ✨ 为什么用它
+
+- 🎯 **什么都不用配就能下**：分享文案、短链 `b23.tv`、裸 ID、弹窗页链接，粘进来的都能识别
+- ⚡ **下载快**：多线程分片 + 自动测速选最快的 CDN 节点，并发数按网速自适应调节（详见[原理](#下载提速原理)）
+- 🧲 **抖音去水印**，视频无声时自动换源重下，不产出坏文件
+- 🎵 **只要音频？** 一键下载 MP3；B站还能带弹幕和字幕
+- 🍪 **Cookie 好心**：扫码登录全自动，过期提前提醒，不用研究"SESSDATA 是什么"
+- 📦 **免安装绿色版**：59MB 解压即用，[点这里下载](https://github.com/alllml/bilibili_dl/releases)
+
+## 🚀 30 秒上手
+
+1. 从 [Releases](https://github.com/alllml/bilibili_dl/releases) 下载 `VideoDownloader-win64.zip`
+2. 解压后双击 `VideoDownloader.exe`（首次运行若被 SmartScreen 拦截，点"仍要运行"）
+3. 粘贴视频链接 → 解析 → 选清晰度 → 下载，完成
+
+<details>
+<summary>📎 想下 1080P / 去水印？需要配一下 Cookie（点开看怎么做）</summary>
+
+打开菜单「B站 Cookie」/「抖音 Cookie」：
+- **B站**：直接扫码登录，全自动；或手动粘贴 Cookie（必需 `SESSDATA`）
+- **抖音**：粘贴 Cookie（必需 `sessionid`），App 里复制分享文案也行
+- 程序会自动识别字段、检查有效期，快过期会提醒你
+- 详细图文步骤见下方 [Cookie 配置](#cookie-配置)
+
+</details>
 
 ---
 
